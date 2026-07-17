@@ -71,7 +71,8 @@ Every integration is **on by default**.  Disable with the matching `--no-*` flag
 | `--ssh` / `--no-ssh`             | on | forward `SSH_AUTH_SOCK`                                |
 | `--git` / `--no-git`             | on | mount `~/.gitconfig`, forward `user.name`/`user.email` |
 | `--gpg-agent` / `--no-gpg-agent` | on | forward host gpg-agent socket for commit signing       |
-| `--opencode` / `--no-opencode`   | on | mount opencode config, cache, and data dirs            |
+| `--<agent>` / `--no-<agent>`     | on | mount that agent's config dirs (e.g. `--opencode`)     |
+| `--agent NAME`                   |    | launch agent `NAME` instead of the default             |
 | `--devenv` / `--no-devenv`       | on | mount `~/.local/share/devenv` across sessions          |
 | `--podman` / `--no-podman`       | on | forward host rootless podman socket (sibling containers) |
 
@@ -88,7 +89,29 @@ agent-sandbox --no-workspace                      # no CWD mount
 agent-sandbox -- bash                              # interactive bash with all integrations
 agent-sandbox -- devenv shell                      # devenv shell with opencode config mounted
 agent-sandbox -- --privileged                      # nested podman inside container
+agent-sandbox --agent claude-code                  # launch a different agent
 ```
+
+## Agents
+
+An agent is a packaged CLI plus the home paths that persist its login state.
+opencode is built in; add more from a downstream flake and pick the default:
+
+```nix
+agent-sandbox.override {
+  defaultAgent = "claude-code";
+  extraAgents = [{
+    name = "claude-code";
+    package = pkgs.claude-code;
+    command = [ "claude" ];
+    state = [ ".claude" ];        # dirs to persist
+    stateFiles = [ ".claude.json" ];  # files (initialised to {} if absent)
+  }];
+}
+```
+
+Each agent gets `--<name>` / `--no-<name>` (config persistence) and is
+launchable with `--agent <name>`.
 
 ## What's in the image
 

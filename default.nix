@@ -1,4 +1,10 @@
-{ pkgs, lib }:
+{
+  pkgs,
+  lib,
+  extraAgents ? [ ],
+  defaultAgent ? "opencode",
+  defaultArgs ? [ ],
+}:
 
 let
   # Full rootless podman stack (c.f. devenv-module-devcontainer/tweaks/podman.nix):
@@ -71,13 +77,65 @@ let
       git
       gh
       nodejs
-      opencode
       stdenv.cc.cc.lib
       zlib
       glibcLocales
     ]
     ++ podmanStack
     ++ [ dockerAlias ];
+
+  # An agent = a packaged CLI plus the home paths that persist its login state.
+  baseAgents = [
+    {
+      name = "opencode";
+      package = pkgs.opencode;
+      command = [
+        "${pkgs.opencode}/bin/opencode"
+        "."
+      ];
+      state = [
+        ".config/opencode"
+        ".cache/opencode"
+        ".local/share/opencode"
+      ];
+    }
+  ];
+
+  agents = baseAgents ++ extraAgents;
+  allTools = baseTools ++ map (a: a.package) agents;
+
+  defaultAgentDef =
+    lib.findFirst (a: a.name == defaultAgent)
+      (throw ''agent-sandbox: defaultAgent "${defaultAgent}" is not among the configured agents'')
+      agents;
+
+  san = lib.replaceStrings [ "-" ] [ "_" ];
+
+  agentDefaults = lib.concatMapStrings (
+    a: "    want_${san a.name}=${if (a.enable or true) then "1" else "0"}\n"
+  ) agents;
+
+  agentCases = lib.concatMapStrings (a: ''
+        --${a.name})    want_${san a.name}=1 ;;
+        --no-${a.name}) want_${san a.name}=0 ;;
+  '') agents;
+
+  agentCommands = lib.concatMapStrings (a: ''
+        ${a.name}) default_cmd=(${lib.escapeShellArgs a.command}) ;;
+  '') agents;
+
+  agentMounts = lib.concatMapStrings (a: ''
+    if [[ "$want_${san a.name}" == "1" ]]; then
+      :
+    ${lib.concatMapStrings (d: ''
+      mkdir -p "$HOME/${d}"
+      mounts+=("-v" "$HOME/${d}:/home/user/${d}:rw")
+    '') (a.state or [ ])}${lib.concatMapStrings (f: ''
+      mkdir -p "$(dirname "$HOME/${f}")"
+      [[ -s "$HOME/${f}" ]] || echo '{}' > "$HOME/${f}"
+      mounts+=("-v" "$HOME/${f}:/home/user/${f}:rw")
+    '') (a.stateFiles or [ ])}    fi
+  '') agents;
 
   nixConf = pkgs.writeTextFile {
     name = "nix-conf";
@@ -137,7 +195,7 @@ let
 
   # All paths baked into the image root, shared between copyToRoot and
   # closureInfo so they stay in sync.
-  containerPaths = baseTools ++ [
+  containerPaths = allTools ++ [
     pkgs.dockerTools.fakeNss
     pkgs.cacert
     nixConf
@@ -260,9 +318,9 @@ KNOWN_HOSTS
     config = {
       WorkingDir = "/workspace";
       Entrypoint = [ "${entrypoint}" ];
-      Cmd = [ "${pkgs.opencode}/bin/opencode" ];
+      Cmd = defaultAgentDef.command;
       Env = [
-        "PATH=${lib.makeBinPath baseTools}"
+        "PATH=${lib.makeBinPath allTools}"
         "LD_LIBRARY_PATH=${
           lib.makeLibraryPath [
             pkgs.stdenv.cc.cc.lib
@@ -400,7 +458,8 @@ KNOWN_HOSTS
   #                              gpg keys are usable for signing inside
   #   --gpg-sign / --no-gpg-sign enable/disable git commit signing (default: on,
   #                              disabled via env override when off)
-  #   --opencode / --no-opencode mount opencode config/share/cache dirs
+  #   --<agent> / --no-<agent> mount that agent's config dirs (e.g. --opencode)
+  #   --agent NAME               launch NAME instead of the default agent
   #   --devenv / --no-devenv     mount ~/.local/share/devenv (persisted
   #                              devenv state)
   #   --podman / --no-podman     forward the host rootless podman socket so the
@@ -433,6 +492,8 @@ KNOWN_HOSTS
       exit 1
     fi
 
+    set -- ${lib.escapeShellArgs defaultArgs} "$@"
+
     # Expand relative paths in -v specs
     expand_v() {
       local spec="$1"
@@ -452,20 +513,17 @@ KNOWN_HOSTS
     want_git=1
     want_gpg=1
     want_gpg_sign=1
-    want_opencode=1
     want_podman=1
     want_devenv=1
     want_nix=1
     want_workspace=1
 
+${agentDefaults}
+    run_agent="${defaultAgent}"
+
     mounts=()
     env_args=()
     podman_args=()
-    if [[ -f "$PWD/devenv.nix" ]]; then
-      cmd_args=("${pkgs.devenv}/bin/devenv" "shell" "--no-tui" "--" "${pkgs.opencode}/bin/opencode" ".")
-    else
-      cmd_args=("${pkgs.opencode}/bin/opencode" ".")
-    fi
 
     while [[ $# -gt 0 ]]; do
       case "$1" in
@@ -477,8 +535,9 @@ KNOWN_HOSTS
         --no-gpg-agent) want_gpg=0 ;;
         --gpg-sign)     want_gpg_sign=1 ;;
         --no-gpg-sign)  want_gpg_sign=0 ;;
-        --opencode)     want_opencode=1 ;;
-        --no-opencode)  want_opencode=0 ;;
+        --agent)        shift; run_agent="$1" ;;
+        --agent=*)      run_agent="''${1#--agent=}" ;;
+${agentCases}
         --devenv)       want_devenv=1 ;;
         --no-devenv)    want_devenv=0 ;;
         --nix)          want_nix=1 ;;
@@ -495,7 +554,17 @@ KNOWN_HOSTS
       shift
     done
 
-    # Everything after -- overrides the container command (default: opencode).
+    case "$run_agent" in
+${agentCommands}      *) echo "agent-sandbox: unknown agent '$run_agent'" >&2; exit 1 ;;
+    esac
+
+    if [[ -f "$PWD/devenv.nix" ]]; then
+      cmd_args=("${pkgs.devenv}/bin/devenv" "shell" "--no-tui" "--" "''${default_cmd[@]}")
+    else
+      cmd_args=("''${default_cmd[@]}")
+    fi
+
+    # Everything after -- overrides the container command entirely.
     if [[ $# -gt 0 ]]; then
       cmd_args=("$@")
     fi
@@ -539,12 +608,7 @@ KNOWN_HOSTS
       env_args+=("-e" "GIT_CONFIG_VALUE_0=false")
     fi
 
-    if [[ "$want_opencode" == "1" ]]; then
-      mkdir -p "$HOME/.local/share/opencode" "$HOME/.config/opencode" "$HOME/.cache/opencode"
-      mounts+=("-v" "$HOME/.local/share/opencode:/home/user/.local/share/opencode:rw")
-      mounts+=("-v" "$HOME/.config/opencode:/home/user/.config/opencode:rw")
-      mounts+=("-v" "$HOME/.cache/opencode:/home/user/.cache/opencode:rw")
-    fi
+${agentMounts}
 
     if [[ "$want_devenv" == "1" ]]; then
       mkdir -p "$HOME/.local/share/devenv"
