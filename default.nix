@@ -285,6 +285,15 @@ KNOWN_HOSTS
       mkdir -p usr/bin
       ln -s ${pkgs.coreutils}/bin/env usr/bin/env
 
+      # fakeNss leaves these as symlinks into the store. The launcher bind-mounts
+      # its own passwd/group over them, and podman resolves the symlink first, so
+      # the mount lands under /nix/store -- where the read-only host store mount,
+      # applied after it, buries it again. Real files keep the mount at /etc.
+      chmod u+w etc
+      rm -f etc/passwd etc/group
+      cp --no-preserve=mode ${pkgs.dockerTools.fakeNss}/etc/passwd etc/passwd
+      cp --no-preserve=mode ${pkgs.dockerTools.fakeNss}/etc/group etc/group
+
       # ELF interpreter required by prebuilt native binaries shipped by npm packages
       # (lightningcss, esbuild, @swc/core, etc. all hard-code /lib64/ld-linux-x86-64.so.2)
       mkdir -p lib64
