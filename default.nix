@@ -483,7 +483,8 @@ KNOWN_HOSTS
   #                              mount CWD as /workspace/<dirname>:rw
   #                              (default: on; no mount = empty /workspace)
   #   --ssh / --no-ssh           forward SSH_AUTH_SOCK into the container
-  #   --git / --no-git           mount ~/.gitconfig and forward git identity
+  #   --git / --no-git           mount ~/.gitconfig and/or ~/.config/git/config
+  #                              and forward git identity
   #   --gpg-agent / --no-gpg-agent
   #                              forward the host gpg-agent socket so host
   #                              gpg keys are usable for signing inside
@@ -613,12 +614,22 @@ ${agentCommands}      *) echo "agent-sandbox: unknown agent '$run_agent'" >&2; e
       env_args+=("-e" "SSH_AUTH_SOCK=/agent.sock")
     fi
 
-    if [[ "$want_git" == "1" && -f "$HOME/.gitconfig" ]]; then
-      mounts+=("-v" "$HOME/.gitconfig:/home/user/.gitconfig:ro")
-      git_name=$(${pkgs.git}/bin/git config --global user.name 2>/dev/null || true)
-      git_email=$(${pkgs.git}/bin/git config --global user.email 2>/dev/null || true)
-      [[ -n "$git_name" ]]  && env_args+=("-e" "GIT_AUTHOR_NAME=$git_name"   "-e" "GIT_COMMITTER_NAME=$git_name")
-      [[ -n "$git_email" ]] && env_args+=("-e" "GIT_AUTHOR_EMAIL=$git_email" "-e" "GIT_COMMITTER_EMAIL=$git_email")
+    if [[ "$want_git" == "1" ]]; then
+      git_config_mounted=0
+      if [[ -f "$HOME/.gitconfig" ]]; then
+        mounts+=("-v" "$HOME/.gitconfig:/home/user/.gitconfig:ro")
+        git_config_mounted=1
+      fi
+      if [[ -f "$HOME/.config/git/config" ]]; then
+        mounts+=("-v" "$HOME/.config/git/config:/home/user/.config/git/config:ro")
+        git_config_mounted=1
+      fi
+      if [[ "$git_config_mounted" == "1" ]]; then
+        git_name=$(${pkgs.git}/bin/git config --global user.name 2>/dev/null || true)
+        git_email=$(${pkgs.git}/bin/git config --global user.email 2>/dev/null || true)
+        [[ -n "$git_name" ]]  && env_args+=("-e" "GIT_AUTHOR_NAME=$git_name"   "-e" "GIT_COMMITTER_NAME=$git_name")
+        [[ -n "$git_email" ]] && env_args+=("-e" "GIT_AUTHOR_EMAIL=$git_email" "-e" "GIT_COMMITTER_EMAIL=$git_email")
+      fi
     fi
 
     if [[ "$want_gpg" == "1" ]]; then
