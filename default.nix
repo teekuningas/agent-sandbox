@@ -342,6 +342,28 @@ KNOWN_HOSTS
     };
   };
 
+  # The launcher bind-mounts the host's /nix/store read-only over the image's
+  # own, so every path baked into the image must also exist on the host. Nothing
+  # on the host refers to them -- the image is a tarball, which nix cannot scan
+  # for references -- so `nix-collect-garbage -d` reaps them and the next
+  # container start dies in crun with "mkdir /nix/store/...: Read-only file
+  # system". Listing them here makes them part of the package's closure instead.
+  #
+  # Every output, not just the default one: buildEnv also installs `man`, and
+  # man-pages' `out` is neither the default output nor in outputsToInstall.
+  imageStoreKeepAlive = pkgs.writeTextDir "share/agent-sandbox/image-store-paths" (
+    lib.concatMapStringsSep "\n" (p: "${p}") (
+      lib.concatMap (p: map (o: p.${o}) (p.outputs or [ "out" ])) containerPaths
+      ++ [
+        entrypoint
+        pkgs.glibc
+        pkgs.glibcLocales
+        pkgs.stdenv.cc.cc.lib
+        pkgs.zlib
+      ]
+    )
+  );
+
   loadScript = pkgs.writeShellScriptBin "agent-sandbox-load" ''
     set -euo pipefail
     echo "Loading agent-sandbox image into podman..."
@@ -674,6 +696,7 @@ pkgs.symlinkJoin {
     launcher
     loadScript
     purgeScript
+    imageStoreKeepAlive
   ];
   meta = {
     description = "Sandboxed AI coding environment via podman";
