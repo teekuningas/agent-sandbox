@@ -464,13 +464,16 @@ KNOWN_HOSTS
   '';
 
   # Usage:
-  #   agent-sandbox [FLAGS] [-- PODMAN_ARGS...] [-- COMMAND...]
+  #   agent-sandbox [FLAGS] [PODMAN_ARGS...] [-- COMMAND...]
   #
-  # The default command inside the container is opencode.  If the current
-  # directory contains a devenv.nix, opencode is launched inside a devenv
-  # shell (`devenv shell -- opencode .`).  Pass a different command after --
+  # The default command inside the container is the default agent.  If the
+  # current directory contains a devenv.nix, the agent is launched inside a
+  # devenv shell (`devenv shell --no-tui -- opencode .`).  Pass a different
+  # command after --
   #
-  # Podman run arguments (--privileged, --network=host, …) also go after --.
+  # Podman run arguments (--privileged, --network=host, …) are passed through
+  # before the -- sentinel: any unrecognised argument goes straight to
+  # `podman run`.
   #
   # -v SOURCE:DEST[:OPTIONS]  Standard podman volume mount (processed
   #   before --).  Relative paths are expanded automatically:
@@ -515,7 +518,7 @@ KNOWN_HOSTS
   #   agent-sandbox --no-gpg-sign                         # disable commit signing
   #   agent-sandbox --no-workspace                         # no CWD mount
   #   agent-sandbox -v ~/src:/workspace/mysrc:rw             # custom workspace
-  #   agent-sandbox -- --privileged                         # enable nested podman
+  #   agent-sandbox --privileged                            # enable nested podman
   launcher = pkgs.writeShellScriptBin "agent-sandbox" ''
     set -euo pipefail
 

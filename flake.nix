@@ -6,7 +6,6 @@
   outputs =
     { self, nixpkgs, ... }:
     let
-      lib = nixpkgs.lib;
       systems = [
         "x86_64-linux"
         "aarch64-linux"
@@ -18,10 +17,9 @@
           (system: {
             name = system;
             value = {
-              default = import ./default.nix {
-                pkgs = nixpkgs.legacyPackages.${system};
-                inherit lib;
-              };
+              # callPackage (not a plain import) so downstream users can
+              # customise with `.override { defaultAgent = …; }`.
+              default = nixpkgs.legacyPackages.${system}.callPackage ./default.nix { };
             };
           })
           systems
