@@ -420,6 +420,21 @@ let
           touch "$out"
         '';
 
+    launcher-args =
+      pkgs.runCommand "agent-sandbox-launcher-arg-tests"
+        {
+          nativeBuildInputs = with pkgs; [
+            bash
+            coreutils
+            gnugrep
+            jq
+          ];
+        }
+        ''
+          bash ${./lib/test-launcher-args.sh} ${./lib/agent-sandbox.sh}
+          touch "$out"
+        '';
+
     shellcheck = pkgs.runCommand "agent-sandbox-shellcheck" { nativeBuildInputs = [ pkgs.shellcheck ]; } ''
       shellcheck --shell=bash ${./lib}/*.sh
       touch "$out"

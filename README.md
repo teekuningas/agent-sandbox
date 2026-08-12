@@ -50,14 +50,31 @@ agent-sandbox -- -- devenv shell
 
 ### Pass podman flags
 
-To pass arguments directly to podman, use `--podman-args`. All arguments after `--podman-args` will be passed to podman until a `--` sentinel is reached, which marks the start of the container command.
+To pass arguments directly to podman there are two forms.
+
+`--podman-args=ARG` passes exactly one argument and is repeatable. It consumes
+nothing but itself, so flags after it are still parsed by agent-sandbox. Use
+this one when baking defaults into a wrapper.
+
+`--podman-args` (no `=`) passes everything that follows to podman until a `--`
+sentinel, which also marks the start of the container command. Because `--` ends
+agent-sandbox's own parsing, anything after it is the command, not a flag.
 
 There are also convenient shortcuts like `--privileged` and `-e` for common podman flags.
 
 ```sh
-agent-sandbox --privileged opencode               # enable nested podman
-agent-sandbox --podman-args --network=host -- bash # host network
-agent-sandbox -e MY_VAR=1 opencode                # pass environment variable
+agent-sandbox --privileged opencode                 # enable nested podman
+agent-sandbox --podman-args=--network=host opencode # host network
+agent-sandbox --podman-args --network=host -- bash  # same, slurp form
+agent-sandbox -e MY_VAR=1 opencode                  # pass environment variable
+```
+
+The repeatable form is what makes a wrapped default work, since it leaves the
+rest of the command line alone:
+
+```nix
+wrapProgram $out/bin/agent-sandbox --add-flags \
+  "--podman-args=--add-host=myhost.tail1234.ts.net:100.64.0.1"
 ```
 
 ### Flags

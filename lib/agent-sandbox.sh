@@ -106,6 +106,8 @@ Mounts:
 Podman / Environment:
   --privileged              pass --privileged to podman run (for nested podman)
   -e, --env NAME=VAL        pass environment variable to podman
+  --podman-args=ARG         pass one arg to podman run; repeatable, and safe to
+                            bake into a wrapper since it consumes nothing else
   --podman-args             treat all following args (until --) as podman args
 
 --podman, --ssh and --gpg-agent each hand the agent a capability that reaches
@@ -251,6 +253,9 @@ while [[ $# -gt 0 ]]; do
       ;;
     -v*) mounts+=("-v" "$(expand_v "${1#-v}")") ;;
 
+    --podman-args=*)
+      podman_args+=("${1#--podman-args=}")
+      ;;
     --podman-args)
       parsing_podman=1
       ;;
@@ -277,7 +282,7 @@ while [[ $# -gt 0 ]]; do
 
     --*)
       echo "agent-sandbox: '$1' is not an agent-sandbox flag." >&2
-      echo "               To pass a podman flag: agent-sandbox --podman-args $1" >&2
+      echo "               To pass a podman flag: agent-sandbox --podman-args=$1" >&2
       exit 1
       ;;
     *)
