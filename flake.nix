@@ -37,10 +37,7 @@
 
       packageFor = system: self.packages.${system}.default;
 
-      app = program: {
-        type = "app";
-        inherit program;
-      };
+
     in
     {
       packages = forAllSystems (pkgs: rec {
@@ -56,8 +53,8 @@
           package = packageFor system;
         in
         {
-          default = app "${package}/bin/agent-sandbox";
-          ctl = app "${package}/bin/agent-sandbox-ctl";
+          default = { type = "app"; program = "${package}/bin/agent-sandbox"; meta = { description = "Sandboxed AI coding environment via podman"; }; };
+          ctl = { type = "app"; program = "${package}/bin/agent-sandbox-ctl"; meta = { description = "agent-sandbox utility for managing running sandboxes"; }; };
         }
       );
 
@@ -65,6 +62,6 @@
       # shellchecks every script, without building the container image.
       checks = lib.genAttrs systems (system: (packageFor system).passthru.checks);
 
-      formatter = forAllSystems (pkgs: pkgs.nixfmt-rfc-style);
+      formatter = forAllSystems (pkgs: pkgs.nixfmt);
     };
 }

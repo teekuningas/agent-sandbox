@@ -1,0 +1,7 @@
+[package]
+name = "agent-sandbox-proxy"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ipnet = "2.9.0"

@@ -32,11 +32,11 @@ export AGENT_SANDBOX_AGENT_SPECS=$'opencode\t["opencode","."]\t[".config/opencod
 
 fails=0
 
+# No integration flags: every integration is off by default, so a bare launch
+# reaches `podman run` without touching the host.
 launch() {
 	rm -f "$PODMAN_ARGV"
-	PATH="$tmp/bin:$PATH" HOME="$tmp/home" bash "$LAUNCHER" \
-		--no-ssh --no-workspace --no-git --no-gnupg-private \
-		--no-firewall --no-ports "$@" >/dev/null 2>&1 || true
+	PATH="$tmp/bin:$PATH" HOME="$tmp/home" bash "$LAUNCHER" "$@" >/dev/null 2>&1 || true
 }
 
 # Assert $2 appears in the recorded argv, labelled $1.

@@ -41,4 +41,15 @@
       ".gemini"
     ];
   }
+  {
+    name = "codex";
+    package = pkgs.codex;
+    command = [
+      "codex"
+      "."
+    ];
+    state = [
+      ".codex"
+    ];
+  }
 ]

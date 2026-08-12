@@ -5,7 +5,7 @@
 # The image ships a pre-registered Nix store database.  When the host's /nix
 # is mounted over it, the host's own database comes along and this would
 # clobber it.
-if [[ "${AGENT_SANDBOX_HOST_NIX:-}" != "1" ]]; then
+if [[ "${AGENT_SANDBOX_SKIP_NIX_INIT:-0}" != "1" && "${AGENT_SANDBOX_HOST_NIX:-}" != "1" ]]; then
   if [[ ! -f /nix/var/nix/db/db.sqlite ]]; then
     nix-store --load-db < /nix/registration
   fi
@@ -22,7 +22,7 @@ if [[ "${AGENT_SANDBOX_GPG_AGENT:-}" == "1" && -S /run/host-gpg-agent ]]; then
   # pinentry prompts on this tty.  It has to be resolved here: the launcher
   # cannot know which pts podman will allocate.
   if [[ -t 0 ]]; then
-    GPG_TTY=$(tty) && export GPG_TTY
+    GPG_TTY=$(readlink /proc/self/fd/0 2>/dev/null) && export GPG_TTY
   fi
 
   # The launcher binds only public key material (see agent-sandbox-gnupg-scan),
@@ -73,6 +73,28 @@ bitbucket.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIazEu89wgQZ4bqs3d63QSMzYVa0Mu
 bitbucket.org ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDQeJzhupRu0u0cdegZIa8e86EG2qOCsIsD1Xw0xSeiPDlCr7kq97NLmMbpKTX6Esc30NuoqEEHCuc7yWtwp8dI76EEEB1VqY9QJq6vk+aySyboD5QF61I/1WeTwu+deCbgKMGbUijeXhtfbxSxm6JwGrXrhBdofTsbKRUsrN1WoNgUa8uqN1Vx6WAJw1JHPhglEGGHea6QICwJOAr/6mrui/oB7pkaWKHj3z7d1IC4KWLtY47elvjbaTlkN04Kc/5LFEirorGYVbt15kAUlqGM65pk6ZBxtaO3+30LVlORZkxOh+LKL/BvbZ/iRNhItLqNyieoQj/uh/7Iv4uyH/cV/0b4WDSd3DptigWq84lJubb9t/DnZlrJazxyDCulTmKdOR7vs9gMTo+uoIrPSb8ScTtvw65+odKAlBj59dhnVp9zd7QUojOpXlL62Aw56U4oO+FALuevvMjiWeavKhJqlR7i5n9srYcrNV7ttmDw7kf/97P5zauIhxcjX+xHv4M=
 KNOWN_HOSTS
   fi
+fi
+
+if [[ -n "${HTTP_PROXY:-}" ]]; then
+  mkdir -p ~/.ssh
+  chmod 700 ~/.ssh
+  if [[ ! -f ~/.ssh/config && ! -h ~/.ssh/config ]]; then
+    proxy_host_port="${HTTP_PROXY#*://}"
+    proxy_host="${proxy_host_port%:*}"
+    proxy_port="${proxy_host_port##*:}"
+    cat >> ~/.ssh/config << SSH_CONFIG
+Host *
+  ProxyCommand socat - PROXY:${proxy_host}:%h:%p,proxyport=${proxy_port}
+SSH_CONFIG
+    chmod 600 ~/.ssh/config
+  fi
+
+  # Node's core http/https and built-in fetch (undici) ignore HTTP_PROXY /
+  # HTTPS_PROXY unless explicitly told to honor them (Node >= 24). This also
+  # covers the bundled Node-based agent CLIs, which all run under the same
+  # runtime. An operator's own explicit setting still wins.
+  : "${NODE_USE_ENV_PROXY:=1}"
+  export NODE_USE_ENV_PROXY
 fi
 
 exec "$@"

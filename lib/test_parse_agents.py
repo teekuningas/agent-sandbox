@@ -260,5 +260,237 @@ class TestProxyDomains(unittest.TestCase):
             parse_proxy_domains(text)
 
 
+class TestProxyAllowIpsParsing(unittest.TestCase):
+    def test_valid_ips(self):
+        text = block('[proxy]\nallow_ips = ["10.0.0.0/8", "8.8.8.8"]')
+        from parse_agents import parse_proxy_allow_ips
+        self.assertEqual(parse_proxy_allow_ips(text), ["10.0.0.0/8", "8.8.8.8"])
+
+    def test_empty_list(self):
+        text = block("[proxy]\nallow_ips = []")
+        from parse_agents import parse_proxy_allow_ips
+        self.assertEqual(parse_proxy_allow_ips(text), [])
+
+    def test_invalid_ip_rejected(self):
+        text = block('[proxy]\nallow_ips = ["130.234.0.0/999"]')
+        from parse_agents import parse_proxy_allow_ips, ConfigError
+        with self.assertRaisesRegex(ConfigError, "not a valid IP address or network"):
+            parse_proxy_allow_ips(text)
+
+    def test_non_string_rejected(self):
+        text = block("[proxy]\nallow_ips = [42]")
+        from parse_agents import parse_proxy_allow_ips, ConfigError
+        with self.assertRaisesRegex(ConfigError, "must be strings"):
+            parse_proxy_allow_ips(text)
+
+
+class TestProxyDenyIpsParsing(unittest.TestCase):
+    def test_valid_ips(self):
+        text = block('[proxy]\ndeny_ips = ["130.234.0.0/16", "1.1.1.1"]')
+        from parse_agents import parse_proxy_deny_ips
+        self.assertEqual(parse_proxy_deny_ips(text), ["130.234.0.0/16", "1.1.1.1"])
+
+    def test_empty_list(self):
+        text = block("[proxy]\ndeny_ips = []")
+        from parse_agents import parse_proxy_deny_ips
+        self.assertEqual(parse_proxy_deny_ips(text), [])
+
+    def test_invalid_ip_rejected(self):
+        text = block('[proxy]\ndeny_ips = ["130.234.0.0/999"]')
+        from parse_agents import parse_proxy_deny_ips, ConfigError
+        with self.assertRaisesRegex(ConfigError, "not a valid IP address or network"):
+            parse_proxy_deny_ips(text)
+
+    def test_non_string_rejected(self):
+        text = block("[proxy]\ndeny_ips = [42]")
+        from parse_agents import parse_proxy_deny_ips, ConfigError
+        with self.assertRaisesRegex(ConfigError, "must be strings"):
+            parse_proxy_deny_ips(text)
+
+
+class TestProxyAllowPortsParsing(unittest.TestCase):
+    def test_valid_ports(self):
+        text = block('[proxy]\nallow_ports = ["443", "8000-8100"]')
+        from parse_agents import parse_proxy_allow_ports
+        self.assertEqual(parse_proxy_allow_ports(text), ["443", "8000-8100"])
+
+    def test_empty_list(self):
+        text = block("[proxy]\nallow_ports = []")
+        from parse_agents import parse_proxy_allow_ports
+        self.assertEqual(parse_proxy_allow_ports(text), [])
+
+    def test_invalid_port_rejected(self):
+        from parse_agents import parse_proxy_allow_ports, ConfigError
+        for bad in ("70000", "abc", "100-50", "0"):
+            text = block(f'[proxy]\nallow_ports = ["{bad}"]')
+            with self.assertRaisesRegex(ConfigError, "not a port or port range|out of range"):
+                parse_proxy_allow_ports(text)
+
+    def test_non_string_rejected(self):
+        text = block("[proxy]\nallow_ports = [443]")
+        from parse_agents import parse_proxy_allow_ports, ConfigError
+        with self.assertRaisesRegex(ConfigError, "must be strings"):
+            parse_proxy_allow_ports(text)
+
+
+class TestProxyDenyDomainsParsing(unittest.TestCase):
+    def test_valid_domains(self):
+        text = block('[proxy]\ndeny_domains = ["github.com", "api.example.org"]')
+        from parse_agents import parse_proxy_deny_domains
+        self.assertEqual(parse_proxy_deny_domains(text), ["github.com", "api.example.org"])
+
+    def test_wildcard_domains(self):
+        text = block('[proxy]\ndeny_domains = ["*.github.com", "*.example.org"]')
+        from parse_agents import parse_proxy_deny_domains
+        self.assertEqual(parse_proxy_deny_domains(text), ["*.github.com", "*.example.org"])
+
+    def test_empty_list(self):
+        text = block("[proxy]\ndeny_domains = []")
+        from parse_agents import parse_proxy_deny_domains
+        self.assertEqual(parse_proxy_deny_domains(text), [])
+
+    def test_no_proxy_block(self):
+        text = block("[ports]\nweb = 3000")
+        from parse_agents import parse_proxy_deny_domains
+        self.assertEqual(parse_proxy_deny_domains(text), [])
+
+    def test_invalid_wildcard_rejected(self):
+        text = block('[proxy]\ndeny_domains = ["*github.com"]')
+        from parse_agents import parse_proxy_deny_domains, ConfigError
+        with self.assertRaisesRegex(ConfigError, "not a valid domain name"):
+            parse_proxy_deny_domains(text)
+
+    def test_non_string_rejected(self):
+        text = block("[proxy]\ndeny_domains = [42]")
+        from parse_agents import parse_proxy_deny_domains, ConfigError
+        with self.assertRaisesRegex(ConfigError, "must be strings"):
+            parse_proxy_deny_domains(text)
+
+
+class TestProxyPolicyFile(unittest.TestCase):
+    """The policy file is the wire format between the host and the proxy.
+
+    Every list here carries two entries on purpose: the bug this format replaced
+    was that a second entry was silently dropped, and a one-entry fixture cannot
+    tell the two apart.
+    """
+
+    def policy(self, body: str) -> str:
+        from parse_agents import format_proxy_policy, parse_proxy
+
+        return format_proxy_policy(parse_proxy(block(body)), "AGENTS.md")
+
+    def test_one_entry_per_line(self):
+        text = self.policy(
+            "[proxy]\n"
+            'allow_domains = ["github.com", "*.githubusercontent.com"]\n'
+            'deny_domains = ["telemetry.example.com", "ads.example.com"]\n'
+            'allow_ips = ["10.0.0.0/8", "192.168.1.0/24"]\n'
+            'deny_ips = ["10.1.0.0/24", "8.8.8.8"]\n'
+            'allow_ports = ["443", "8000-8100"]\n'
+        )
+        self.assertEqual(
+            text.splitlines()[1:],
+            [
+                "allow_domains github.com",
+                "allow_domains *.githubusercontent.com",
+                "deny_domains telemetry.example.com",
+                "deny_domains ads.example.com",
+                "allow_ips 10.0.0.0/8",
+                "allow_ips 192.168.1.0/24",
+                "deny_ips 10.1.0.0/24",
+                "deny_ips 8.8.8.8",
+                "allow_ports 443",
+                "allow_ports 8000-8100",
+            ],
+        )
+
+    def test_first_line_names_the_source(self):
+        self.assertTrue(self.policy("[proxy]").startswith("# generated by"))
+
+    def test_no_value_ever_contains_whitespace(self):
+        # This is the invariant the proxy enforces on read, so the writer must
+        # never be able to produce a violation.
+        text = self.policy(
+            "[proxy]\n"
+            'allow_domains = ["github.com", "*.example.org"]\n'
+            'allow_ips = ["10.0.0.0/8", "2001:db8::/32"]\n'
+        )
+        for line in text.splitlines():
+            if line.startswith("#"):
+                continue
+            self.assertEqual(len(line.split()), 2, line)
+
+    def test_empty_proxy_block_emits_only_the_comment(self):
+        self.assertEqual(len(self.policy("[proxy]").splitlines()), 1)
+
+    def test_default_is_carried_through(self):
+        self.assertIn("default deny", self.policy('[proxy]\ndefault = "deny"'))
+
+    def test_default_rejects_anything_else(self):
+        from parse_agents import ConfigError
+
+        with self.assertRaisesRegex(ConfigError, "expected 'allow' or 'deny'"):
+            self.policy('[proxy]\ndefault = "maybe"')
+
+    def test_unknown_field_is_rejected(self):
+        # A typo used to leave the allow list empty, which for a firewall means
+        # allowing everything.
+        from parse_agents import ConfigError
+
+        with self.assertRaisesRegex(ConfigError, "unknown field.*allow_domians"):
+            self.policy('[proxy]\nallow_domians = ["github.com"]')
+
+    def test_blocks_accumulate(self):
+        from parse_agents import format_proxy_policy, parse_proxy
+
+        text = (
+            block('[proxy]\nallow_domains = ["a.example.com"]')
+            + block('[proxy]\nallow_domains = ["b.example.com"]')
+        )
+        rendered = format_proxy_policy(parse_proxy(text), "AGENTS.md")
+        self.assertIn("allow_domains a.example.com", rendered)
+        self.assertIn("allow_domains b.example.com", rendered)
+
+
 if __name__ == "__main__":
     unittest.main()
+
+class TestMounts(unittest.TestCase):
+    def test_string_value(self):
+        from parse_agents import parse_mounts
+        text = block('[mounts]\n"data" = "/workspace/data"')
+        self.assertEqual(parse_mounts(text), ["data:/workspace/data"])
+
+    def test_dict_value(self):
+        from parse_agents import parse_mounts
+        text = block('[mounts]\n"config.json" = { destination = "/etc/config", options = ["ro"] }')
+        self.assertEqual(parse_mounts(text), ["config.json:/etc/config:ro"])
+
+    def test_dict_value_with_multiple_options(self):
+        from parse_agents import parse_mounts
+        text = block('[mounts]\n"config.json" = { destination = "/etc/config", options = ["ro", "z"] }')
+        self.assertEqual(parse_mounts(text), ["config.json:/etc/config:ro,z"])
+
+    def test_dict_value_with_string_options(self):
+        from parse_agents import parse_mounts
+        text = block('[mounts]\n"config.json" = { destination = "/etc/config", options = "ro,z" }')
+        self.assertEqual(parse_mounts(text), ["config.json:/etc/config:ro,z"])
+
+    def test_missing_destination(self):
+        from parse_agents import parse_mounts, ConfigError
+        text = block('[mounts]\n"data" = { options = ["ro"] }')
+        with self.assertRaisesRegex(ConfigError, "missing required field 'destination'"):
+            parse_mounts(text)
+
+    def test_unknown_field(self):
+        from parse_agents import parse_mounts, ConfigError
+        text = block('[mounts]\n"data" = { destination = "/data", source = "data" }')
+        with self.assertRaisesRegex(ConfigError, "unknown field"):
+            parse_mounts(text)
+
+    def test_not_a_table(self):
+        from parse_agents import parse_mounts, ConfigError
+        text = block('mounts = 3')
+        with self.assertRaisesRegex(ConfigError, r"\[mounts\] must be a table"):
+            parse_mounts(text)
