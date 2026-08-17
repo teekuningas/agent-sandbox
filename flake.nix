@@ -45,6 +45,10 @@
         # The image itself, for `nix build .#image` and for shipping it
         # somewhere other than the local podman store.
         image = default.passthru.image;
+        # The cooperative host browser, with a pinned Chromium.  Kept out of
+        # `default` so a plain install does not carry a browser closure;
+        # `agent-sandbox browser` from that install uses a Chromium on PATH.
+        browser = default.passthru.browserLauncher;
       });
 
       apps = lib.genAttrs systems (
@@ -54,12 +58,13 @@
         in
         {
           default = { type = "app"; program = "${package}/bin/agent-sandbox"; meta = { description = "Sandboxed AI coding environment via podman"; }; };
-          ctl = { type = "app"; program = "${package}/bin/agent-sandbox-ctl"; meta = { description = "agent-sandbox utility for managing running sandboxes"; }; };
+          browser = { type = "app"; program = "${package.passthru.browserLauncher}/bin/agent-sandbox-browser"; meta = { description = "Throwaway host browser behind a deny-by-default allow list"; }; };
         }
       );
 
-      # `nix flake check` runs the parser and gnupg-classifier test suites and
-      # shellchecks every script, without building the container image.
+      # `nix flake check` builds the Rust workspace, which runs `cargo test`
+      # over the launcher, parser and policy suites, without building the
+      # container image.
       checks = lib.genAttrs systems (system: (packageFor system).passthru.checks);
 
       formatter = forAllSystems (pkgs: pkgs.nixfmt);

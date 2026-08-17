@@ -1,0 +1,52 @@
+[package]
+name = "agent-sandbox-cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.4", features = ["derive", "env"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+anyhow = "1.0"
+thiserror = "1.0"
+pulldown-cmark = "0.9" # For parsing AGENTS.md markdown codeblocks
+tempfile = "3.8"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+ctrlc = "3.4"
+nix = { version = "0.27", features = ["process", "signal", "user", "net", "fs", "mount"] }
+chrono = "0.4"
+rand = "0.8"
+uuid = { version = "1.0", features = ["v4"] }
+libc = "0.2"
+agent-sandbox-proxy = { path = "../proxy" }
+
+[[bin]]
+name = "agent-sandbox"
+path = "src/bin/agent-sandbox.rs"
+
+
+[[bin]]
+name = "agent-sandbox-sidecar"
+path = "src/bin/agent-sandbox-sidecar.rs"
+
+[[bin]]
+name = "agent-sandbox-parse-agents"
+path = "src/bin/agent-sandbox-parse-agents.rs"
+
+[[bin]]
+name = "agent-sandbox-resolve-secrets"
+path = "src/bin/agent-sandbox-resolve-secrets.rs"
+
+[[bin]]
+name = "agent-sandbox-gnupg-scan"
+path = "src/bin/agent-sandbox-gnupg-scan.rs"
+
+[[bin]]
+name = "agent-sandbox-entrypoint"
+path = "src/bin/agent-sandbox-entrypoint.rs"
+
+[[bin]]
+name = "agent-sandbox-network-summary"
+path = "src/bin/agent-sandbox-network-summary.rs"

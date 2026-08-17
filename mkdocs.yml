@@ -1,0 +1,56 @@
+site_name: agent-sandbox
+site_description: Sandboxed AI coding environment that runs inside a rootless Podman container.
+repo_url: https://github.com/datakurre/agent-sandbox
+repo_name: datakurre/agent-sandbox
+
+theme:
+  name: material
+  palette:
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - toc.integrate
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+
+nav:
+  - Home: index.md
+  - User Guide:
+    - Usage & Flags: usage.md
+    - Configuration: configuration.md
+    - Trust Model: trust-model.md
+  - Reference:
+    - Architecture: architecture.md
+    - Development: development.md
+    - Testing: testing.md
+    - Cooperative Browser: browser.md

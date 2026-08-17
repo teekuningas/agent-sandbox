@@ -15,7 +15,7 @@
     ];
   }
   {
-    name = "claude-code";
+    name = "claude";
     package = pkgs.claude-code;
     command = [ "claude" ];
     state = [ ".claude" ];
